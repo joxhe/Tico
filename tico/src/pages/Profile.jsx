@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth, db } from '../firebase/config'
 import { signOut, updateProfile } from 'firebase/auth'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { lugares } from '../data/lugares'
+import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore'
 import {
   User, MapPin, Phone, Heart, HelpCircle,
   ChevronDown, ChevronUp, Target, LogOut, Pencil, Bell
@@ -18,49 +17,53 @@ export default function Profile() {
   const [openSection, setOpenSection] = useState(null)
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [loadingPerfil, setLoadingPerfil] = useState(true)
 
   const [nombre, setNombre] = useState(user?.displayName || '')
   const [ciudad, setCiudad] = useState('')
   const [telefono, setTelefono] = useState('')
   const [intereses, setIntereses] = useState([])
-  const [favoritos, setFavoritos] = useState([])
-
-  // Foto de perfil mejorada y con fallback
+  const [favoritos, setFavoritos] = useState([])       // IDs de favoritos
+  const [lugaresFavs, setLugaresFavs] = useState([])  // Objetos completos
   const [fotoPerfil, setFotoPerfil] = useState(null)
 
   useEffect(() => {
-    if (!user) { 
-      navigate('/login'); 
-      return 
-    }
+    if (!user) { navigate('/login'); return }
 
-    // Cargar foto de perfil correctamente
-    const cargarFoto = () => {
-      const photo = user.photoURL || user.providerData?.[0]?.photoURL
-      if (photo) {
-        setFotoPerfil(photo)
-      }
-    }
+    const photo = user.photoURL || user.providerData?.[0]?.photoURL
+    if (photo) setFotoPerfil(photo)
 
-    cargarFoto()
-
-    const cargarPerfil = async () => {
-      const ref = doc(db, 'usuarios', user.uid)
-      const snap = await getDoc(ref)
-      if (snap.exists()) {
-        const data = snap.data()
-        setCiudad(data.ciudad || '')
-        setTelefono(data.telefono || '')
-        setIntereses(data.intereses || [])
-        setFavoritos(data.favoritos || [])
+    const cargar = async () => {
+      try {
+        // 1. Cargar perfil del usuario
+        const ref = doc(db, 'usuarios', user.uid)
+        const snap = await getDoc(ref)
         
-        // Si hay foto guardada en Firestore, usarla también
-        if (data.fotoPerfil) {
-          setFotoPerfil(data.fotoPerfil)
+        let favIds = []
+        if (snap.exists()) {
+          const data = snap.data()
+          setCiudad(data.ciudad || '')
+          setTelefono(data.telefono || '')
+          setIntereses(data.intereses || [])
+          favIds = data.favoritos || []
+          setFavoritos(favIds)
+          if (data.fotoPerfil) setFotoPerfil(data.fotoPerfil)
         }
+
+        // 2. Cargar los lugares favoritos desde Firestore
+        if (favIds.length > 0) {
+          const lugaresSnap = await getDocs(collection(db, 'lugares'))
+          const todos = lugaresSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+          setLugaresFavs(todos.filter(l => favIds.includes(l.id)))
+        }
+      } catch (e) {
+        console.error('Error cargando perfil:', e)
+      } finally {
+        setLoadingPerfil(false)
       }
     }
-    cargarPerfil()
+
+    cargar()
   }, [user, navigate])
 
   const toggleSeccion = (sec) => setOpenSection(openSection === sec ? null : sec)
@@ -75,12 +78,11 @@ export default function Profile() {
     setLoading(true)
     try {
       await updateProfile(user, { displayName: nombre })
-
       await setDoc(doc(db, 'usuarios', user.uid), {
-        nombre, 
-        ciudad, 
-        telefono, 
-        intereses, 
+        nombre,
+        ciudad,
+        telefono,
+        intereses,
         favoritos,
         fotoPerfil: fotoPerfil || user.photoURL || user.providerData?.[0]?.photoURL,
         email: user.email,
@@ -90,7 +92,23 @@ export default function Profile() {
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
-      console.error(e)
+      console.error('Error guardando perfil:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const guardarIntereses = async () => {
+    setLoading(true)
+    try {
+      await setDoc(doc(db, 'usuarios', user.uid), {
+        intereses,
+        updatedAt: new Date()
+      }, { merge: true })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e) {
+      console.error('Error guardando intereses:', e)
     } finally {
       setLoading(false)
     }
@@ -101,7 +119,18 @@ export default function Profile() {
     window.location.href = '/login'
   }
 
-  const lugarsFavoritos = lugares.filter(l => favoritos.includes(l.id))
+  if (loadingPerfil) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#F9FAFB' }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: '50%',
+          border: '3px solid #E8F7F2', borderTopColor: '#1D9E75',
+          animation: 'spin 0.8s linear infinite'
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    )
+  }
 
   const secciones = [
     {
@@ -162,15 +191,16 @@ export default function Profile() {
                 border: intereses.includes(i) ? '2px solid #1D9E75' : '2px solid #E5E7EB',
                 background: intereses.includes(i) ? '#E8F7F2' : 'white',
                 color: intereses.includes(i) ? '#1D9E75' : '#6B7280',
-                fontWeight: 600, fontSize: 13, cursor: 'pointer'
+                fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                transition: 'all 0.15s'
               }}>
                 {i}
               </button>
             ))}
           </div>
-          <button onClick={guardarPerfil} disabled={loading}
+          <button onClick={guardarIntereses} disabled={loading}
             style={{ ...btnGuardarStyle, marginTop: 16 }}>
-            {loading ? 'Guardando...' : saved ? '✓ Guardado' : 'Guardar'}
+            {loading ? 'Guardando...' : saved ? '✓ Guardado' : 'Guardar intereses'}
           </button>
         </div>
       )
@@ -178,38 +208,47 @@ export default function Profile() {
     {
       id: 'favoritos',
       icon: <Heart size={18} color="#1D9E75" />,
-      label: `Mis favoritos (${lugarsFavoritos.length})`,
+      label: `Mis favoritos (${lugaresFavs.length})`,
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4 }}>
-          {lugarsFavoritos.length === 0 ? (
+          {lugaresFavs.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '20px 0', color: '#9CA3AF' }}>
-              <Heart size={32} color="#E5E7EB" style={{ margin: '0 auto 8px' }} />
+              <Heart size={32} color="#E5E7EB" style={{ margin: '0 auto 8px', display: 'block' }} />
               <p style={{ fontSize: 14, margin: 0 }}>Aún no tienes favoritos</p>
-              <p style={{ fontSize: 12, margin: '4px 0 0' }}>Explora el mapa y guarda los lugares que te gusten</p>
+              <p style={{ fontSize: 12, margin: '4px 0 0' }}>
+                Explora el mapa y guarda los lugares que te gusten
+              </p>
             </div>
           ) : (
-            lugarsFavoritos.map(lugar => (
-              <div key={lugar.id} onClick={() => navigate(`/detail/${lugar.id}`)}
+            lugaresFavs.map(lugar => (
+              <div key={lugar.id} onClick={() => navigate(`/detail/${lugar.id}`, { state: { lugar } })}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '10px 12px', borderRadius: 12,
                   border: '1px solid #F3F4F6', cursor: 'pointer', background: '#FAFAFA'
                 }}>
                 <div style={{
-                  width: 42, height: 42, borderRadius: 10, background: '#E8F7F2',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                  width: 48, height: 48, borderRadius: 10, overflow: 'hidden',
+                  background: '#E8F7F2', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>
-                  <MapPin size={18} color="#1D9E75" />
+                  {lugar.foto ? (
+                    <img src={lugar.foto} alt={lugar.nombre}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <MapPin size={18} color="#1D9E75" />
+                  )}
                 </div>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontWeight: 700, fontSize: 14, color: '#1A1A2E', margin: 0 }}>
                     {lugar.nombre}
                   </p>
                   <p style={{ fontSize: 12, color: '#9CA3AF', margin: 0 }}>
-                    {lugar.categoria} · {lugar.distancia}
+                    {lugar.categoria}
+                    {lugar.distancia ? ` · ${lugar.distancia}` : ''}
                   </p>
                 </div>
-                <ChevronDown size={16} color="#D1D5DB" style={{ transform: 'rotate(-90deg)' }} />
+                <ChevronDown size={16} color="#D1D5DB" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }} />
               </div>
             ))
           )}
@@ -277,30 +316,23 @@ export default function Profile() {
   return (
     <div style={{ minHeight: '100vh', background: '#F9FAFB', paddingBottom: 80, overflowY: 'auto' }}>
 
-      {/* Header minimalista */}
+      {/* Header */}
       <div style={{
         background: 'white',
         padding: '52px 24px 24px',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
         borderBottom: '1px solid #F3F4F6'
       }}>
-
-        {/* Avatar - Versión más robusta */}
         <div style={{ position: 'relative' }}>
           <div style={{
             width: 104, height: 104, borderRadius: '50%',
-            background: '#F3F4F6',
-            border: '3px solid #E8F7F2',
+            background: '#F3F4F6', border: '3px solid #E8F7F2',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             overflow: 'hidden'
           }}>
             {fotoPerfil ? (
-              <img 
-                src={fotoPerfil} 
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                alt="avatar" 
-                onError={() => setFotoPerfil(null)}
-              />
+              <img src={fotoPerfil} style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                alt="avatar" onError={() => setFotoPerfil(null)} />
             ) : (
               <User size={38} color="#9CA3AF" />
             )}
@@ -315,7 +347,6 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Nombre y correo */}
         <div style={{ textAlign: 'center' }}>
           <h2 style={{ fontWeight: 800, fontSize: 20, color: '#1A1A2E', margin: 0 }}>
             {user?.displayName || 'Usuario'}
@@ -328,12 +359,11 @@ export default function Profile() {
         {/* Stats */}
         <div style={{
           display: 'flex', gap: 0,
-          background: '#F9FAFB',
-          borderRadius: 14, padding: '12px 0',
+          background: '#F9FAFB', borderRadius: 14, padding: '12px 0',
           width: '100%', marginTop: 4
         }}>
           <div style={statStyle}>
-            <span style={{ fontWeight: 800, fontSize: 22, color: '#1D9E75' }}>{lugarsFavoritos.length}</span>
+            <span style={{ fontWeight: 800, fontSize: 22, color: '#1D9E75' }}>{lugaresFavs.length}</span>
             <span style={{ fontSize: 11, color: '#9CA3AF', fontWeight: 500 }}>Favoritos</span>
           </div>
           <div style={{ width: 1, background: '#E5E7EB' }} />
@@ -348,11 +378,8 @@ export default function Profile() {
       <div style={{ padding: '16px 16px 0' }}>
         {secciones.map((sec) => (
           <div key={sec.id} style={{
-            background: 'white',
-            borderRadius: 14,
-            marginBottom: 8,
-            overflow: 'hidden',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+            background: 'white', borderRadius: 14, marginBottom: 8,
+            overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
             border: '1px solid #F3F4F6'
           }}>
             <button onClick={() => toggleSeccion(sec.id)} style={{
@@ -383,7 +410,6 @@ export default function Profile() {
           </div>
         ))}
 
-        {/* Cerrar sesión */}
         <button onClick={cerrarSesion} style={{
           width: '100%', padding: '15px', borderRadius: 14,
           border: '1px solid #FEE2E2', background: 'white',
