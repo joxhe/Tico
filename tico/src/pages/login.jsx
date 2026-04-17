@@ -39,7 +39,7 @@ export default function Login() {
     setError('')
     try {
       await signInWithPopup(auth, provider)
-      navigate('/')
+      navigate('/map')
     } catch (e) {
       setError('Error al iniciar sesión con Google')
     }
@@ -61,7 +61,7 @@ export default function Login() {
       } else {
         await signInWithEmailAndPassword(auth, email, password)
       }
-      navigate('/')
+      navigate('/map')
     } catch (e) {
       if (e.code === 'auth/email-already-in-use') setError('Este correo ya está registrado')
       else if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password') setError('Correo o contraseña incorrectos')
