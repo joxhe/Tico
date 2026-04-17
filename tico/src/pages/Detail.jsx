@@ -42,9 +42,9 @@ export default function Detail() {
   const [resenas, setResenas] = useState([])
   const [fotoUrl, setFotoUrl] = useState(null)
 
+  // ── Cargar lugar ──────────────────────────────────────────────────────────
   useEffect(() => {
     async function fetchLugar() {
-      // 1. Cargar datos del lugar
       const state = location.state?.lugar
       if (state) {
         setLugar(state)
@@ -63,12 +63,15 @@ export default function Detail() {
           console.error(e)
         }
       }
-
-      // 2. Verificar si es favorito (siempre, independientemente del estado)
-      await verificarFavorito()
     }
     fetchLugar()
   }, [id])
+
+  // ── Verificar favorito en useEffect separado ──────────────────────────────
+  // (antes estaba dentro de fetchLugar y podía tener race conditions)
+  useEffect(() => {
+    verificarFavorito()
+  }, [id, user])
 
   const cargarDesdePlaces = (local) => {
     if (!window.google) return
@@ -106,19 +109,21 @@ export default function Detail() {
       if (snap.exists()) {
         const favs = snap.data().favoritos || []
         setEsFavorito(favs.includes(id))
+      } else {
+        setEsFavorito(false)
       }
     } catch (e) {
-      console.error(e)
+      console.error('Error verificando favorito:', e)
+      setEsFavorito(false)
     } finally {
       setLoadingFav(false)
     }
   }
 
   const toggleFavorito = async () => {
-    if (!user) return
-    // Optimistic update
+    if (!user || loadingFav) return
     const nuevoEstado = !esFavorito
-    setEsFavorito(nuevoEstado)
+    setEsFavorito(nuevoEstado)          // optimistic update
     try {
       const ref = doc(db, 'usuarios', user.uid)
       await setDoc(ref, {
@@ -126,8 +131,7 @@ export default function Detail() {
       }, { merge: true })
     } catch (e) {
       console.error(e)
-      // Revertir si falla
-      setEsFavorito(!nuevoEstado)
+      setEsFavorito(!nuevoEstado)       // revertir si falla
     }
   }
 
@@ -163,19 +167,23 @@ export default function Detail() {
     )
   }
 
+  // Soporta tanto "precio" (viejo) como "entrada" (Firestore)
+  const precioTexto = lugar.precio || lugar.entrada || null
+
   return (
     <div style={{ minHeight: '100vh', background: 'white', paddingBottom: 140, overflowY: 'auto' }}>
 
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes heartPop {
-          0% { transform: scale(1); }
-          50% { transform: scale(1.35); }
+          0%   { transform: scale(1); }
+          40%  { transform: scale(1.4); }
+          70%  { transform: scale(0.9); }
           100% { transform: scale(1); }
         }
       ` }} />
 
-      {/* Hero foto */}
+      {/* ── Hero foto ── */}
       <div style={{ position: 'relative', height: 280, background: '#E8F7F2', overflow: 'hidden' }}>
         {fotoUrl ? (
           <img
@@ -209,23 +217,28 @@ export default function Detail() {
           <button onClick={() => navigate(-1)} style={iconBtnStyle}>
             <ArrowLeft size={20} color="#1A1A2E" />
           </button>
+
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={compartir} style={iconBtnStyle}>
               <Share2 size={18} color="#1A1A2E" />
             </button>
+
+            {/* ── Botón favorito ── */}
             <button
               onClick={toggleFavorito}
               disabled={loadingFav}
               style={{
                 ...iconBtnStyle,
                 background: esFavorito ? '#FEE2E2' : 'white',
-                animation: !loadingFav && esFavorito ? 'heartPop 0.3s ease' : 'none'
+                animation: esFavorito ? 'heartPop 0.35s ease' : 'none',
+                transition: 'background 0.2s'
               }}
             >
               <Heart
                 size={18}
                 color={esFavorito ? '#EF4444' : '#1A1A2E'}
                 fill={esFavorito ? '#EF4444' : 'none'}
+                style={{ transition: 'color 0.2s, fill 0.2s' }}
               />
             </button>
           </div>
@@ -249,7 +262,7 @@ export default function Detail() {
         )}
       </div>
 
-      {/* Contenido */}
+      {/* ── Contenido ── */}
       <div style={{ padding: '20px 20px 0' }}>
 
         <div style={{ marginBottom: 12 }}>
@@ -275,9 +288,9 @@ export default function Detail() {
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-          {lugar.horario && <InfoChip icon={<Clock size={13} color="#1D9E75" />} text={lugar.horario} />}
+          {lugar.horario  && <InfoChip icon={<Clock  size={13} color="#1D9E75" />} text={lugar.horario} />}
           {lugar.distancia && <InfoChip icon={<MapPin size={13} color="#1D9E75" />} text={lugar.distancia} />}
-          {lugar.precio && <InfoChip icon={<Ticket size={13} color="#1D9E75" />} text={lugar.precio} />}
+          {precioTexto    && <InfoChip icon={<Ticket size={13} color="#1D9E75" />} text={precioTexto} />}
         </div>
 
         <p style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.7, marginBottom: 20 }}>
@@ -336,7 +349,7 @@ export default function Detail() {
         )}
       </div>
 
-      {/* Botones fijos abajo */}
+      {/* ── Botones fijos abajo ── */}
       <div style={{
         position: 'fixed', bottom: 64, left: 0, right: 0,
         background: 'white', padding: '12px 20px 16px',
@@ -373,7 +386,7 @@ export default function Detail() {
         </button>
       </div>
 
-      {/* Modal 360 */}
+      {/* ── Modal 360 ── */}
       {mostrar360 && (
         <div style={{
           position: 'fixed', inset: 0,
@@ -399,7 +412,11 @@ export default function Detail() {
             </button>
           </div>
           <iframe
-            src={'https://www.google.com/maps/embed/v1/streetview?key=' + MAPS_KEY + '&location=' + lugar.lat + ',' + lugar.lng + '&heading=210&pitch=10&fov=80'}
+            src={
+              'https://www.google.com/maps/embed/v1/streetview?key=' + MAPS_KEY +
+              '&location=' + lugar.lat + ',' + lugar.lng +
+              '&heading=210&pitch=10&fov=80'
+            }
             style={{ flex: 1, border: 'none' }}
             allowFullScreen
           />
