@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed": "node --experimental-vm-modules seedFirestore.js",
+    "update-fotos": "node updateFotos.js"
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",

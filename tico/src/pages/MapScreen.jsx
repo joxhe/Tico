@@ -2,65 +2,26 @@ import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-map
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search } from 'lucide-react'
+import { collection, getDocs } from 'firebase/firestore'
+import { db } from '../firebase/config'
 
 const MONTERIA_CENTER = { lat: 8.7479, lng: -75.8814 }
 
-const lugares = [
-  {
-    id: 1,
-    nombre: 'Malecón del Río Sinú',
-    categoria: 'Naturaleza',
-    descripcion: 'El paseo más emblemático de Montería a orillas del Río Sinú.',
-    calificacion: 4.9,
-    distancia: '0.8 km',
-    horario: 'Abierto 24h',
-    precio: 'Entrada libre',
-    vrDisponible: true,
-    position: { lat: 8.7513, lng: -75.8850 },
-    color: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png'
-  },
-  {
-    id: 2,
-    nombre: 'Catedral San Jerónimo',
-    categoria: 'Cultura',
-    descripcion: 'Patrimonio arquitectónico y religioso del centro de Montería.',
-    calificacion: 4.8,
-    distancia: '1.2 km',
-    horario: 'Abierto ahora',
-    precio: 'Entrada libre',
-    vrDisponible: true,
-    position: { lat: 8.7479, lng: -75.8814 },
-    color: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
-  },
-  {
-    id: 3,
-    nombre: 'Restaurante La Ceiba',
-    categoria: 'Gastronomía',
-    descripcion: 'La mejor cocina cordobesa tradicional en el corazón de la ciudad.',
-    calificacion: 4.7,
-    distancia: '1.5 km',
-    horario: '12:00 - 22:00',
-    precio: 'Desde $25.000',
-    vrDisponible: false,
-    position: { lat: 8.7450, lng: -75.8790 },
-    color: 'http://maps.google.com/mapfiles/ms/icons/orange-dot.png'
-  },
-  {
-    id: 4,
-    nombre: 'Parque Simón Bolívar',
-    categoria: 'Turismo',
-    descripcion: 'El parque central de Montería, punto de encuentro de la ciudad.',
-    calificacion: 4.6,
-    distancia: '2.0 km',
-    horario: 'Abierto 24h',
-    precio: 'Entrada libre',
-    vrDisponible: false,
-    position: { lat: 8.7495, lng: -75.8801 },
-    color: 'http://maps.google.com/mapfiles/ms/icons/purple-dot.png'
-  },
-]
+const COLORES = {
+  naturaleza:  'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+  cultura:     'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+  gastronomia: 'http://maps.google.com/mapfiles/ms/icons/orange-dot.png',
+  turismo:     'http://maps.google.com/mapfiles/ms/icons/purple-dot.png',
+}
 
-const categorias = ['Todos', 'Naturaleza', 'Cultura', 'Gastronomía', 'Turismo']
+const categorias = ['Todos', 'naturaleza', 'cultura', 'gastronomia', 'turismo']
+const categoriasLabel = {
+  Todos: 'Todos',
+  naturaleza: 'Naturaleza',
+  cultura: 'Cultura',
+  gastronomia: 'Gastronomía',
+  turismo: 'Turismo'
+}
 
 const NAVBAR_HEIGHT = 64
 
@@ -70,9 +31,26 @@ function getViewportHeight() {
 
 export default function MapScreen() {
   const navigate = useNavigate()
+  const [lugares, setLugares] = useState([])
   const [selectedLugar, setSelectedLugar] = useState(null)
   const [categoriaActiva, setCategoriaActiva] = useState('Todos')
   const [mapHeight, setMapHeight] = useState(getViewportHeight())
+  const [loadingLugares, setLoadingLugares] = useState(true)
+
+  // Jalar lugares desde Firestore
+  useEffect(() => {
+    async function fetchLugares() {
+      const snap = await getDocs(collection(db, 'lugares'))
+      const data = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        position: { lat: doc.data().lat, lng: doc.data().lng }
+      }))
+      setLugares(data)
+      setLoadingLugares(false)
+    }
+    fetchLugares()
+  }, [])
 
   useEffect(() => {
     const update = () => setMapHeight(getViewportHeight())
@@ -85,14 +63,14 @@ export default function MapScreen() {
   }, [])
 
   const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: 'AIzaSyBi9N8ltzSS4LPtlbaJWuNrjns3o90iTkw'
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_KEY
   })
 
   const lugaresFiltrados = categoriaActiva === 'Todos'
     ? lugares
     : lugares.filter(l => l.categoria === categoriaActiva)
 
-  if (!isLoaded) return (
+  if (!isLoaded || loadingLugares) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: mapHeight }}>
       <p style={{ color: '#1D9E75', fontWeight: 600 }}>Cargando mapa...</p>
     </div>
@@ -116,7 +94,7 @@ export default function MapScreen() {
           <Marker
             key={lugar.id}
             position={lugar.position}
-            icon={lugar.color}
+            icon={COLORES[lugar.categoria] || COLORES.turismo}
             onClick={() => setSelectedLugar(lugar)}
           />
         ))}
@@ -134,7 +112,7 @@ export default function MapScreen() {
                 ⭐ {selectedLugar.calificacion} · {selectedLugar.distancia}
               </p>
               <button
-                onClick={() => navigate(`/detail/${selectedLugar.id}`)}
+                onClick={() => navigate(`/detail/${selectedLugar.id}`, { state: { lugar: selectedLugar } })}
                 style={{
                   background: '#1D9E75',
                   color: 'white',
@@ -201,7 +179,7 @@ export default function MapScreen() {
                 color: categoriaActiva === cat ? 'white' : '#4B5563',
               }}
             >
-              {cat}
+              {categoriasLabel[cat]}
             </button>
           ))}
         </div>

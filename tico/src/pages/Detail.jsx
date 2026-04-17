@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { auth, db } from '../firebase/config'
 import { doc, getDoc, setDoc, arrayUnion, arrayRemove } from 'firebase/firestore'
-import { lugares } from '../data/lugares'
 import {
   ArrowLeft, Heart, Star, Clock, MapPin,
   Ticket, Globe, Share2
 } from 'lucide-react'
 
-const MAPS_KEY = 'AIzaSyBi9N8ltzSS4LPtlbaJWuNrjns3o90iTkw'
+const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY
 
 function InfoChip({ icon, text }) {
   return (
@@ -33,6 +32,7 @@ const iconBtnStyle = {
 export default function Detail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const user = auth.currentUser
 
   const [lugar, setLugar] = useState(null)
@@ -43,13 +43,29 @@ export default function Detail() {
   const [fotoUrl, setFotoUrl] = useState(null)
 
   useEffect(() => {
-    const local = lugares.find(l => l.id === id)
-    if (local) {
-      setLugar(local)
-      if (local.foto) setFotoUrl(local.foto)
-      cargarDesdePlaces(local)
+    async function fetchLugar() {
+      // Primero intenta con el state que viene del mapa
+      const state = location.state?.lugar
+      if (state) {
+        setLugar(state)
+        cargarDesdePlaces(state)
+        verificarFavorito()
+        return
+      }
+      // Si no hay state, jala desde Firestore por ID
+      try {
+        const snap = await getDoc(doc(db, 'lugares', id))
+        if (snap.exists()) {
+          const data = { id: snap.id, ...snap.data() }
+          setLugar(data)
+          cargarDesdePlaces(data)
+        }
+      } catch (e) {
+        console.error(e)
+      }
+      verificarFavorito()
     }
-    verificarFavorito()
+    fetchLugar()
   }, [id])
 
   const cargarDesdePlaces = (local) => {
@@ -67,12 +83,12 @@ export default function Detail() {
           ...prev,
           calificacion: place.rating || prev.calificacion,
           resenas: place.user_ratings_total || prev.resenas,
-          horario: place.opening_hours && place.opening_hours.weekday_text
+          horario: place.opening_hours?.weekday_text
             ? place.opening_hours.weekday_text[0]
             : prev.horario,
           direccion: place.formatted_address || ''
         }))
-        if (place.photos && place.photos[0] && !local.foto) {
+        if (place.photos?.[0] && !local.foto) {
           setFotoUrl(place.photos[0].getUrl({ maxWidth: 800 }))
         }
         if (place.reviews) {
@@ -198,7 +214,7 @@ export default function Detail() {
         </div>
 
         {/* Badge 360 */}
-        {lugar.tiene360 && (
+        {lugar.vrDisponible && (
           <button
             onClick={() => setMostrar360(true)}
             style={{
@@ -218,7 +234,6 @@ export default function Detail() {
       {/* Contenido */}
       <div style={{ padding: '20px 20px 0' }}>
 
-        {/* Categoria y nombre */}
         <div style={{ marginBottom: 12 }}>
           <span style={{
             fontSize: 11, fontWeight: 700, color: '#1D9E75',
@@ -231,7 +246,6 @@ export default function Detail() {
           </h1>
         </div>
 
-        {/* Rating */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
           <Star size={16} color="#F5A623" fill="#F5A623" />
           <span style={{ fontWeight: 700, fontSize: 15, color: '#1A1A2E' }}>
@@ -242,19 +256,16 @@ export default function Detail() {
           </span>
         </div>
 
-        {/* Chips */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
           <InfoChip icon={<Clock size={13} color="#1D9E75" />} text={lugar.horario} />
           <InfoChip icon={<MapPin size={13} color="#1D9E75" />} text={lugar.distancia} />
-          <InfoChip icon={<Ticket size={13} color="#1D9E75" />} text={lugar.entrada} />
+          <InfoChip icon={<Ticket size={13} color="#1D9E75" />} text={lugar.precio} />
         </div>
 
-        {/* Descripcion */}
         <p style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.7, marginBottom: 20 }}>
           {lugar.descripcion}
         </p>
 
-        {/* Direccion */}
         {lugar.direccion && (
           <div style={{
             display: 'flex', gap: 10, alignItems: 'flex-start',
@@ -270,7 +281,6 @@ export default function Detail() {
 
         <div style={{ height: 1, background: '#F3F4F6', marginBottom: 20 }} />
 
-        {/* Resenas */}
         {resenas.length > 0 && (
           <div style={{ marginBottom: 20 }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A2E', marginBottom: 12 }}>
@@ -293,17 +303,14 @@ export default function Detail() {
                     </p>
                     <div style={{ display: 'flex', gap: 2 }}>
                       {[...Array(5)].map((_, j) => (
-                        <Star
-                          key={j} size={10}
-                          color="#F5A623"
-                          fill={j < r.rating ? '#F5A623' : 'none'}
-                        />
+                        <Star key={j} size={10} color="#F5A623"
+                          fill={j < r.rating ? '#F5A623' : 'none'} />
                       ))}
                     </div>
                   </div>
                 </div>
                 <p style={{ margin: 0, fontSize: 13, color: '#6B7280', lineHeight: 1.5 }}>
-                  {r.text && r.text.length > 150 ? r.text.slice(0, 150) + '...' : r.text}
+                  {r.text?.length > 150 ? r.text.slice(0, 150) + '...' : r.text}
                 </p>
               </div>
             ))}
@@ -318,7 +325,7 @@ export default function Detail() {
         borderTop: '1px solid #F3F4F6',
         display: 'flex', gap: 10, zIndex: 50
       }}>
-        {lugar.tiene360 && (
+        {lugar.vrDisponible && (
           <button
             onClick={() => setMostrar360(true)}
             style={{

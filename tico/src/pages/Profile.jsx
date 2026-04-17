@@ -25,8 +25,25 @@ export default function Profile() {
   const [intereses, setIntereses] = useState([])
   const [favoritos, setFavoritos] = useState([])
 
+  // Foto de perfil mejorada y con fallback
+  const [fotoPerfil, setFotoPerfil] = useState(null)
+
   useEffect(() => {
-    if (!user) { navigate('/login'); return }
+    if (!user) { 
+      navigate('/login'); 
+      return 
+    }
+
+    // Cargar foto de perfil correctamente
+    const cargarFoto = () => {
+      const photo = user.photoURL || user.providerData?.[0]?.photoURL
+      if (photo) {
+        setFotoPerfil(photo)
+      }
+    }
+
+    cargarFoto()
+
     const cargarPerfil = async () => {
       const ref = doc(db, 'usuarios', user.uid)
       const snap = await getDoc(ref)
@@ -36,10 +53,15 @@ export default function Profile() {
         setTelefono(data.telefono || '')
         setIntereses(data.intereses || [])
         setFavoritos(data.favoritos || [])
+        
+        // Si hay foto guardada en Firestore, usarla también
+        if (data.fotoPerfil) {
+          setFotoPerfil(data.fotoPerfil)
+        }
       }
     }
     cargarPerfil()
-  }, [user])
+  }, [user, navigate])
 
   const toggleSeccion = (sec) => setOpenSection(openSection === sec ? null : sec)
 
@@ -53,11 +75,18 @@ export default function Profile() {
     setLoading(true)
     try {
       await updateProfile(user, { displayName: nombre })
+
       await setDoc(doc(db, 'usuarios', user.uid), {
-        nombre, ciudad, telefono, intereses, favoritos,
+        nombre, 
+        ciudad, 
+        telefono, 
+        intereses, 
+        favoritos,
+        fotoPerfil: fotoPerfil || user.photoURL || user.providerData?.[0]?.photoURL,
         email: user.email,
         updatedAt: new Date()
       }, { merge: true })
+
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
@@ -256,7 +285,7 @@ export default function Profile() {
         borderBottom: '1px solid #F3F4F6'
       }}>
 
-        {/* Avatar */}
+        {/* Avatar - Versión más robusta */}
         <div style={{ position: 'relative' }}>
           <div style={{
             width: 104, height: 104, borderRadius: '50%',
@@ -265,10 +294,16 @@ export default function Profile() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             overflow: 'hidden'
           }}>
-            {user?.photoURL
-              ? <img src={user.photoURL} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="avatar" />
-              : <User size={38} color="#9CA3AF" />
-            }
+            {fotoPerfil ? (
+              <img 
+                src={fotoPerfil} 
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                alt="avatar" 
+                onError={() => setFotoPerfil(null)}
+              />
+            ) : (
+              <User size={38} color="#9CA3AF" />
+            )}
           </div>
           <div style={{
             position: 'absolute', bottom: 0, right: 0,
@@ -311,7 +346,7 @@ export default function Profile() {
 
       {/* Secciones acordeón */}
       <div style={{ padding: '16px 16px 0' }}>
-        {secciones.map((sec, idx) => (
+        {secciones.map((sec) => (
           <div key={sec.id} style={{
             background: 'white',
             borderRadius: 14,
