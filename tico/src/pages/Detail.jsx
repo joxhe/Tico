@@ -37,33 +37,35 @@ export default function Detail() {
 
   const [lugar, setLugar] = useState(null)
   const [esFavorito, setEsFavorito] = useState(false)
-  const [loadingFav, setLoadingFav] = useState(false)
+  const [loadingFav, setLoadingFav] = useState(true)
   const [mostrar360, setMostrar360] = useState(false)
   const [resenas, setResenas] = useState([])
   const [fotoUrl, setFotoUrl] = useState(null)
 
   useEffect(() => {
     async function fetchLugar() {
+      // 1. Cargar datos del lugar
       const state = location.state?.lugar
       if (state) {
         setLugar(state)
         if (state.foto) setFotoUrl(state.foto)
         cargarDesdePlaces(state)
-        verificarFavorito()
-        return
-      }
-      try {
-        const snap = await getDoc(doc(db, 'lugares', id))
-        if (snap.exists()) {
-          const data = { id: snap.id, ...snap.data() }
-          setLugar(data)
-          if (data.foto) setFotoUrl(data.foto)
-          cargarDesdePlaces(data)
+      } else {
+        try {
+          const snap = await getDoc(doc(db, 'lugares', id))
+          if (snap.exists()) {
+            const data = { id: snap.id, ...snap.data() }
+            setLugar(data)
+            if (data.foto) setFotoUrl(data.foto)
+            cargarDesdePlaces(data)
+          }
+        } catch (e) {
+          console.error(e)
         }
-      } catch (e) {
-        console.error(e)
       }
-      verificarFavorito()
+
+      // 2. Verificar si es favorito (siempre, independientemente del estado)
+      await verificarFavorito()
     }
     fetchLugar()
   }, [id])
@@ -81,12 +83,11 @@ export default function Detail() {
         const place = results[0]
         setLugar(prev => ({
           ...prev,
-          calificacion: place.rating || prev.calificacion,
-          resenas: place.user_ratings_total || prev.resenas,
-          horario: place.opening_hours?.weekday_text?.[0] || prev.horario,
+          calificacion: place.rating || prev?.calificacion,
+          resenas: place.user_ratings_total || prev?.resenas,
+          horario: place.opening_hours?.weekday_text?.[0] || prev?.horario,
           direccion: place.formatted_address || ''
         }))
-        // Solo usa foto de Places si NO hay foto en Firestore
         if (place.photos?.[0] && !local.foto) {
           setFotoUrl(place.photos[0].getUrl({ maxWidth: 800 }))
         }
@@ -98,28 +99,35 @@ export default function Detail() {
   }
 
   const verificarFavorito = async () => {
-    if (!user) return
-    const ref = doc(db, 'usuarios', user.uid)
-    const snap = await getDoc(ref)
-    if (snap.exists()) {
-      const favs = snap.data().favoritos || []
-      setEsFavorito(favs.includes(id))
+    if (!user) { setLoadingFav(false); return }
+    try {
+      const ref = doc(db, 'usuarios', user.uid)
+      const snap = await getDoc(ref)
+      if (snap.exists()) {
+        const favs = snap.data().favoritos || []
+        setEsFavorito(favs.includes(id))
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingFav(false)
     }
   }
 
   const toggleFavorito = async () => {
     if (!user) return
-    setLoadingFav(true)
+    // Optimistic update
+    const nuevoEstado = !esFavorito
+    setEsFavorito(nuevoEstado)
     try {
       const ref = doc(db, 'usuarios', user.uid)
       await setDoc(ref, {
-        favoritos: esFavorito ? arrayRemove(id) : arrayUnion(id)
+        favoritos: nuevoEstado ? arrayUnion(id) : arrayRemove(id)
       }, { merge: true })
-      setEsFavorito(!esFavorito)
     } catch (e) {
       console.error(e)
-    } finally {
-      setLoadingFav(false)
+      // Revertir si falla
+      setEsFavorito(!nuevoEstado)
     }
   }
 
@@ -158,7 +166,14 @@ export default function Detail() {
   return (
     <div style={{ minHeight: '100vh', background: 'white', paddingBottom: 140, overflowY: 'auto' }}>
 
-      <style dangerouslySetInnerHTML={{ __html: '@keyframes spin { to { transform: rotate(360deg); } }' }} />
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes heartPop {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.35); }
+          100% { transform: scale(1); }
+        }
+      ` }} />
 
       {/* Hero foto */}
       <div style={{ position: 'relative', height: 280, background: '#E8F7F2', overflow: 'hidden' }}>
@@ -201,7 +216,11 @@ export default function Detail() {
             <button
               onClick={toggleFavorito}
               disabled={loadingFav}
-              style={{ ...iconBtnStyle, background: esFavorito ? '#FEE2E2' : 'white' }}
+              style={{
+                ...iconBtnStyle,
+                background: esFavorito ? '#FEE2E2' : 'white',
+                animation: !loadingFav && esFavorito ? 'heartPop 0.3s ease' : 'none'
+              }}
             >
               <Heart
                 size={18}

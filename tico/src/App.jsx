@@ -4,6 +4,7 @@ import MapScreen from './pages/MapScreen'
 import Detail from './pages/Detail'
 import Recommendations from './pages/Recommendations'
 import Profile from './pages/Profile'
+import Favorites from './pages/Favorites'
 import Navbar from './components/Navbar'
 import { useAuthState } from 'react-firebase-hooks/auth'
 import { auth } from './firebase/config'
@@ -27,6 +28,7 @@ function AppContent() {
           <Route path="/map" element={<PrivateRoute><MapScreen /></PrivateRoute>} />
           <Route path="/detail/:id" element={<PrivateRoute><Detail /></PrivateRoute>} />
           <Route path="/recommendations" element={<PrivateRoute><Recommendations /></PrivateRoute>} />
+          <Route path="/favorites" element={<PrivateRoute><Favorites /></PrivateRoute>} />
           <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
         </Routes>
       </div>

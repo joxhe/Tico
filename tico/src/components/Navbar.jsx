@@ -27,6 +27,13 @@ export default function Navbar() {
       {tabs.map(tab => {
         const active = pathname === tab.path
         const Icon   = tab.icon
+
+        // El ícono de Favoritos se rellena en rojo cuando está activo
+        const isFavTab = tab.path === '/favorites'
+        const iconColor = active
+          ? (isFavTab ? '#EF4444' : '#1D9E75')
+          : '#9CA3AF'
+
         return (
           <button
             key={tab.path}
@@ -47,12 +54,13 @@ export default function Navbar() {
             <Icon
               size={22}
               strokeWidth={active ? 2.5 : 1.8}
-              color={active ? '#1D9E75' : '#9CA3AF'}
+              color={iconColor}
+              fill={active && isFavTab ? '#EF4444' : 'none'}
             />
             <span style={{
               fontSize: '10px',
               fontWeight: 600,
-              color: active ? '#1D9E75' : '#9CA3AF'
+              color: iconColor
             }}>
               {tab.label}
             </span>
