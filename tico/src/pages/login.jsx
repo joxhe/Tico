@@ -124,7 +124,7 @@ export default function Login() {
         }}>
           <TicoLogo />
           <h1 style={{ fontSize: '48px', fontWeight: 900, color: 'white', letterSpacing: '12px', margin: 0 }}>TICO</h1>
-          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '16px', fontWeight: 300, margin: 0 }}>Descubre Montería</p>
+          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '16px', fontWeight: 300, margin: 0 }}>Descubre Montería y San Carlos</p>
         </div>
 
         {/* Formulario */}

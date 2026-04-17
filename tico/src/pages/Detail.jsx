@@ -44,20 +44,20 @@ export default function Detail() {
 
   useEffect(() => {
     async function fetchLugar() {
-      // Primero intenta con el state que viene del mapa
       const state = location.state?.lugar
       if (state) {
         setLugar(state)
+        if (state.foto) setFotoUrl(state.foto)
         cargarDesdePlaces(state)
         verificarFavorito()
         return
       }
-      // Si no hay state, jala desde Firestore por ID
       try {
         const snap = await getDoc(doc(db, 'lugares', id))
         if (snap.exists()) {
           const data = { id: snap.id, ...snap.data() }
           setLugar(data)
+          if (data.foto) setFotoUrl(data.foto)
           cargarDesdePlaces(data)
         }
       } catch (e) {
@@ -77,17 +77,16 @@ export default function Detail() {
       query: local.nombre + ' Montería Colombia',
       fields: ['photos', 'rating', 'user_ratings_total', 'opening_hours', 'reviews', 'formatted_address']
     }, (results, status) => {
-      if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results[0]) {
+      if (status === window.google.maps.places.PlacesServiceStatus.OK && results?.[0]) {
         const place = results[0]
         setLugar(prev => ({
           ...prev,
           calificacion: place.rating || prev.calificacion,
           resenas: place.user_ratings_total || prev.resenas,
-          horario: place.opening_hours?.weekday_text
-            ? place.opening_hours.weekday_text[0]
-            : prev.horario,
+          horario: place.opening_hours?.weekday_text?.[0] || prev.horario,
           direccion: place.formatted_address || ''
         }))
+        // Solo usa foto de Places si NO hay foto en Firestore
         if (place.photos?.[0] && !local.foto) {
           setFotoUrl(place.photos[0].getUrl({ maxWidth: 800 }))
         }
@@ -144,10 +143,7 @@ export default function Detail() {
 
   if (!lugar) {
     return (
-      <div style={{
-        display: 'flex', alignItems: 'center',
-        justifyContent: 'center', height: '100vh'
-      }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <div style={{
           width: 32, height: 32, borderRadius: '50%',
           border: '3px solid #1D9E75',
@@ -160,24 +156,27 @@ export default function Detail() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'white', paddingBottom: 100, overflowY: 'auto' }}>
+    <div style={{ minHeight: '100vh', background: 'white', paddingBottom: 140, overflowY: 'auto' }}>
 
       <style dangerouslySetInnerHTML={{ __html: '@keyframes spin { to { transform: rotate(360deg); } }' }} />
 
       {/* Hero foto */}
-      <div style={{ position: 'relative', height: 260, background: '#E8F7F2', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', height: 280, background: '#E8F7F2', overflow: 'hidden' }}>
         {fotoUrl ? (
           <img
             src={fotoUrl}
             alt={lugar.nombre}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            onError={() => setFotoUrl(null)}
           />
         ) : (
           <div style={{
             width: '100%', height: '100%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexDirection: 'column', gap: 8
           }}>
             <MapPin size={48} color="#1D9E75" />
+            <span style={{ fontSize: 13, color: '#9CA3AF' }}>{lugar.nombre}</span>
           </div>
         )}
 
@@ -257,9 +256,9 @@ export default function Detail() {
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-          <InfoChip icon={<Clock size={13} color="#1D9E75" />} text={lugar.horario} />
-          <InfoChip icon={<MapPin size={13} color="#1D9E75" />} text={lugar.distancia} />
-          <InfoChip icon={<Ticket size={13} color="#1D9E75" />} text={lugar.precio} />
+          {lugar.horario && <InfoChip icon={<Clock size={13} color="#1D9E75" />} text={lugar.horario} />}
+          {lugar.distancia && <InfoChip icon={<MapPin size={13} color="#1D9E75" />} text={lugar.distancia} />}
+          {lugar.precio && <InfoChip icon={<Ticket size={13} color="#1D9E75" />} text={lugar.precio} />}
         </div>
 
         <p style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.7, marginBottom: 20 }}>
@@ -320,8 +319,8 @@ export default function Detail() {
 
       {/* Botones fijos abajo */}
       <div style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0,
-        background: 'white', padding: '12px 20px 28px',
+        position: 'fixed', bottom: 64, left: 0, right: 0,
+        background: 'white', padding: '12px 20px 16px',
         borderTop: '1px solid #F3F4F6',
         display: 'flex', gap: 10, zIndex: 50
       }}>
