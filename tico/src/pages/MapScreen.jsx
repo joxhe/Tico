@@ -14,6 +14,13 @@ const CATEGORIA_COLOR = {
   turismo:     '#0369A1',
 }
 
+const CATEGORIA_EMOJI = {
+  naturaleza:  '🌿',
+  cultura:     '🏛️',
+  gastronomia: '🍽️',
+  turismo:     '🛍️',
+}
+
 const categorias = ['Todos', 'naturaleza', 'cultura', 'gastronomia', 'turismo']
 const categoriasLabel = {
   Todos: 'Todos',
@@ -37,29 +44,38 @@ function getViewportHeight() {
   return (window.visualViewport?.height || window.innerHeight) - NAVBAR_HEIGHT
 }
 
-// SVG del pin como data URL — estático, no cambia entre renders
-function buildPinIcon(isSelected) {
+// Cache de iconos para no regenerar en cada render
+const iconCache = {}
+
+function buildPinIcon(categoria, isSelected) {
+  const cacheKey = `${categoria}-${isSelected}`
+  if (iconCache[cacheKey]) return iconCache[cacheKey]
+
+  const color = CATEGORIA_COLOR[categoria?.toLowerCase()] || '#1D9E75'
   const size = isSelected ? 54 : 44
+
+  // Mismo diseño original, solo cambia el color según categoría
   const svg = `
     <svg width="${size}" height="${Math.round(size * 1.27)}" viewBox="0 0 44 56"
       fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M22 2C12.06 2 4 10.06 4 20C4 33 22 54 22 54C22 54 40 33 40 20C40 10.06 31.94 2 22 2Z"
-        fill="#1D9E75"/>
-      <circle cx="22" cy="20" r="12" fill="#0F4C35" opacity="0.4"/>
+        fill="${color}"/>
+      <circle cx="22" cy="20" r="12" fill="${color}" opacity="0.4"/>
       <path d="M13 22 C15 18, 18 17, 20 19 C22 21, 25 21, 28 18"
         stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
       <circle cx="28" cy="18" r="2.5" fill="#F5A623"/>
     </svg>
   `
-  return {
+
+  const icon = {
     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
     scaledSize: { width: size, height: Math.round(size * 1.27) },
     anchor: { x: size / 2, y: Math.round(size * 1.27) },
   }
-}
 
-const PIN_NORMAL   = buildPinIcon(false)
-const PIN_SELECTED = buildPinIcon(true)
+  iconCache[cacheKey] = icon
+  return icon
+}
 
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function MapScreen() {
@@ -170,7 +186,7 @@ export default function MapScreen() {
           <Marker
             key={lugar.id}
             position={lugar.position}
-            icon={selectedLugar?.id === lugar.id ? PIN_SELECTED : PIN_NORMAL}
+            icon={buildPinIcon(lugar.categoria, selectedLugar?.id === lugar.id)}
             onClick={() => setSelectedLugar(
               selectedLugar?.id === lugar.id ? null : lugar
             )}
@@ -192,14 +208,14 @@ export default function MapScreen() {
                 {selectedLugar.foto
                   ? <img src={selectedLugar.foto} alt={selectedLugar.nombre}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : <MapPin size={32} color="#1D9E75" />
+                  : <MapPin size={32} color={catColor} />
                 }
               </div>
               <span style={{
                 fontSize: '10px', fontWeight: '700', color: catColor,
                 textTransform: 'uppercase', letterSpacing: '0.5px',
               }}>
-                {selectedLugar.categoria}
+                {CATEGORIA_EMOJI[selectedLugar.categoria?.toLowerCase()] || '📍'} {selectedLugar.categoria}
               </span>
               <p style={{ fontWeight: '800', fontSize: '14px', color: '#1A1A2E', margin: '2px 0 6px', lineHeight: 1.3 }}>
                 {selectedLugar.nombre}
@@ -213,7 +229,7 @@ export default function MapScreen() {
               <button
                 onClick={() => navigate(`/detail/${selectedLugar.id}`, { state: { lugar: selectedLugar } })}
                 style={{
-                  width: '100%', padding: '8px 0', background: '#1D9E75',
+                  width: '100%', padding: '8px 0', background: catColor,
                   color: 'white', border: 'none', borderRadius: '20px',
                   fontSize: '12px', fontWeight: '700', cursor: 'pointer',
                 }}
@@ -267,51 +283,61 @@ export default function MapScreen() {
               boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
               overflow: 'hidden', zIndex: 20
             }}>
-              {sugerencias.map(lugar => (
-                <div
-                  key={lugar.id}
-                  onClick={() => handleSelectSugerencia(lugar)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', cursor: 'pointer' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <div style={{
-                    width: '36px', height: '36px', borderRadius: '10px',
-                    background: '#E8F7F2', flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    <MapPin size={16} color="#1D9E75" />
+              {sugerencias.map(lugar => {
+                const pinColor = CATEGORIA_COLOR[lugar.categoria?.toLowerCase()] || '#1D9E75'
+                return (
+                  <div
+                    key={lugar.id}
+                    onClick={() => handleSelectSugerencia(lugar)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{
+                      width: '36px', height: '36px', borderRadius: '10px',
+                      background: pinColor + '18', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <MapPin size={16} color={pinColor} />
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#1A1A2E' }}>
+                        {lugar.nombre}
+                      </p>
+                      <p style={{ margin: 0, fontSize: '12px', color: pinColor, fontWeight: 600 }}>
+                        {CATEGORIA_EMOJI[lugar.categoria?.toLowerCase()]} {categoriasLabel[lugar.categoria] || lugar.categoria} · {lugar.distancia}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#1A1A2E' }}>
-                      {lugar.nombre}
-                    </p>
-                    <p style={{ margin: 0, fontSize: '12px', color: '#9CA3AF' }}>
-                      {lugar.categoria} · {lugar.distancia}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
 
+        {/* Filtros de categoría */}
         <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
-          {categorias.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setCategoriaActiva(cat)}
-              style={{
-                flexShrink: 0, padding: '8px 16px', borderRadius: '999px',
-                fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-                background: categoriaActiva === cat ? '#1D9E75' : 'white',
-                color: categoriaActiva === cat ? 'white' : '#4B5563',
-              }}
-            >
-              {categoriasLabel[cat]}
-            </button>
-          ))}
+          {categorias.map(cat => {
+            const active = categoriaActiva === cat
+            const color = CATEGORIA_COLOR[cat] || '#1D9E75'
+            return (
+              <button
+                key={cat}
+                onClick={() => setCategoriaActiva(cat)}
+                style={{
+                  flexShrink: 0, padding: '8px 16px', borderRadius: '999px',
+                  fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                  background: active ? (cat === 'Todos' ? '#1D9E75' : color) : 'white',
+                  color: active ? 'white' : (cat === 'Todos' ? '#4B5563' : color),
+                  transition: 'all 0.2s'
+                }}
+              >
+                {cat !== 'Todos' && CATEGORIA_EMOJI[cat] + ' '}
+                {categoriasLabel[cat]}
+              </button>
+            )
+          })}
         </div>
       </div>
 
