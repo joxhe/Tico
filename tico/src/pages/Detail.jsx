@@ -41,6 +41,8 @@ export default function Detail() {
   const [mostrar360, setMostrar360] = useState(false)
   const [resenas, setResenas] = useState([])
   const [fotoUrl, setFotoUrl] = useState(null)
+  // null = aún verificando, true = disponible, false = no disponible
+  const [streetViewDisponible, setStreetViewDisponible] = useState(null)
 
   // ── Cargar lugar ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -67,8 +69,27 @@ export default function Detail() {
     fetchLugar()
   }, [id])
 
-  // ── Verificar favorito en useEffect separado ──────────────────────────────
-  // (antes estaba dentro de fetchLugar y podía tener race conditions)
+  // ── Verificar StreetView dinámicamente ────────────────────────────────────
+  useEffect(() => {
+    if (!lugar || !window.google) return
+
+    const sv = new window.google.maps.StreetViewService()
+    sv.getPanorama(
+      {
+        location: { lat: lugar.lat, lng: lugar.lng },
+        radius: 50,           // busca hasta 50m alrededor
+        preference: window.google.maps.StreetViewPreference.NEAREST,
+        source: window.google.maps.StreetViewSource.OUTDOOR,
+      },
+      (data, status) => {
+        setStreetViewDisponible(
+          status === window.google.maps.StreetViewStatus.OK
+        )
+      }
+    )
+  }, [lugar])
+
+  // ── Verificar favorito ────────────────────────────────────────────────────
   useEffect(() => {
     verificarFavorito()
   }, [id, user])
@@ -123,7 +144,7 @@ export default function Detail() {
   const toggleFavorito = async () => {
     if (!user || loadingFav) return
     const nuevoEstado = !esFavorito
-    setEsFavorito(nuevoEstado)          // optimistic update
+    setEsFavorito(nuevoEstado)
     try {
       const ref = doc(db, 'usuarios', user.uid)
       await setDoc(ref, {
@@ -131,7 +152,7 @@ export default function Detail() {
       }, { merge: true })
     } catch (e) {
       console.error(e)
-      setEsFavorito(!nuevoEstado)       // revertir si falla
+      setEsFavorito(!nuevoEstado)
     }
   }
 
@@ -167,7 +188,6 @@ export default function Detail() {
     )
   }
 
-  // Soporta tanto "precio" (viejo) como "entrada" (Firestore)
   const precioTexto = lugar.precio || lugar.entrada || null
 
   return (
@@ -223,7 +243,6 @@ export default function Detail() {
               <Share2 size={18} color="#1A1A2E" />
             </button>
 
-            {/* ── Botón favorito ── */}
             <button
               onClick={toggleFavorito}
               disabled={loadingFav}
@@ -244,8 +263,8 @@ export default function Detail() {
           </div>
         </div>
 
-        {/* Badge 360 */}
-        {lugar.vrDisponible && (
+        {/* Badge 360 — solo si StreetView está confirmado disponible */}
+        {streetViewDisponible === true && (
           <button
             onClick={() => setMostrar360(true)}
             style={{
@@ -288,9 +307,9 @@ export default function Detail() {
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-          {lugar.horario  && <InfoChip icon={<Clock  size={13} color="#1D9E75" />} text={lugar.horario} />}
+          {lugar.horario   && <InfoChip icon={<Clock  size={13} color="#1D9E75" />} text={lugar.horario} />}
           {lugar.distancia && <InfoChip icon={<MapPin size={13} color="#1D9E75" />} text={lugar.distancia} />}
-          {precioTexto    && <InfoChip icon={<Ticket size={13} color="#1D9E75" />} text={precioTexto} />}
+          {precioTexto     && <InfoChip icon={<Ticket size={13} color="#1D9E75" />} text={precioTexto} />}
         </div>
 
         <p style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.7, marginBottom: 20 }}>
@@ -356,7 +375,8 @@ export default function Detail() {
         borderTop: '1px solid #F3F4F6',
         display: 'flex', gap: 10, zIndex: 50
       }}>
-        {lugar.vrDisponible && (
+        {/* Botón 360° solo si StreetView confirmado */}
+        {streetViewDisponible === true && (
           <button
             onClick={() => setMostrar360(true)}
             style={{
@@ -386,7 +406,7 @@ export default function Detail() {
         </button>
       </div>
 
-      {/* ── Modal 360 ── */}
+      {/* ── Modal StreetView ── */}
       {mostrar360 && (
         <div style={{
           position: 'fixed', inset: 0,
