@@ -2,12 +2,13 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAar3HvBweN4dmzORLC-e1xL2CxJyN7X5k",
-  authDomain: "tico-app-b914b.firebaseapp.com",
-  projectId: "tico-app-b914b",
-  storageBucket: "tico-app-b914b.firebasestorage.app",
-  messagingSenderId: "814571930909",
-  appId: "1:814571930909:web:4cb38b922e2f6072738df4"
+  apiKey: "AIzaSyCkQWCsfrvOpFmeTepFR7fYT8UauQl1j70",
+  authDomain: "ticoo-71755.firebaseapp.com",
+  projectId: "ticoo-71755",
+  storageBucket: "ticoo-71755.firebasestorage.app",
+  messagingSenderId: "59741601356",
+  appId: "1:59741601356:web:6668e9fb1c913c32843ee9",
+  measurementId: "G-232DVJXL2N"
 };
 
 const app = initializeApp(firebaseConfig);
