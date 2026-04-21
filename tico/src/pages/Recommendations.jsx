@@ -16,16 +16,13 @@ const CATEGORIA_META = {
   turismo:     { label: 'Turismo',     icon: Compass,  color: '#0369A1', bg: '#E0F2FE' },
 }
 
-// Mapa: interés del perfil → categoría de lugar
+// ✅ Mapa: interés del perfil → categoría de lugar (alineado con MapScreen)
 const INTERES_A_CATEGORIA = {
   'naturaleza':   'naturaleza',
   'gastronomía':  'gastronomia',
   'gastronomia':  'gastronomia',
   'cultura':      'cultura',
-  'historia':     'cultura',
-  'aventura':     'naturaleza',
-  'fotografía':   'cultura',
-  'fotografia':   'cultura',
+  'turismo':      'turismo',
 }
 
 // ─── Scoring dinámico ─────────────────────────────────────────────────────────

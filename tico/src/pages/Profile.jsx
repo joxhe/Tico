@@ -8,7 +8,8 @@ import {
   ChevronDown, ChevronUp, Target, LogOut, Pencil, Bell
 } from 'lucide-react'
 
-const INTERESES = ['Naturaleza', 'Gastronomía', 'Cultura', 'Historia', 'Aventura', 'Fotografía']
+// ✅ Intereses alineados con las categorías reales del mapa
+const INTERESES = ['Naturaleza', 'Gastronomía', 'Cultura', 'Turismo']
 
 export default function Profile() {
   const navigate = useNavigate()
@@ -23,8 +24,8 @@ export default function Profile() {
   const [ciudad, setCiudad] = useState('')
   const [telefono, setTelefono] = useState('')
   const [intereses, setIntereses] = useState([])
-  const [favoritos, setFavoritos] = useState([])       // IDs de favoritos
-  const [lugaresFavs, setLugaresFavs] = useState([])  // Objetos completos
+  const [favoritos, setFavoritos] = useState([])
+  const [lugaresFavs, setLugaresFavs] = useState([])
   const [fotoPerfil, setFotoPerfil] = useState(null)
 
   useEffect(() => {
@@ -35,7 +36,6 @@ export default function Profile() {
 
     const cargar = async () => {
       try {
-        // 1. Cargar perfil del usuario
         const ref = doc(db, 'usuarios', user.uid)
         const snap = await getDoc(ref)
         
@@ -50,7 +50,6 @@ export default function Profile() {
           if (data.fotoPerfil) setFotoPerfil(data.fotoPerfil)
         }
 
-        // 2. Cargar los lugares favoritos desde Firestore
         if (favIds.length > 0) {
           const lugaresSnap = await getDocs(collection(db, 'lugares'))
           const todos = lugaresSnap.docs.map(d => ({ id: d.id, ...d.data() }))
