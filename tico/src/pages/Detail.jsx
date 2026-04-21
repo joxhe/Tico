@@ -29,7 +29,7 @@ const iconBtnStyle = {
   cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
 }
 
-export default function Detail() {
+export default function Detail({ onRequireAuth }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
@@ -41,10 +41,8 @@ export default function Detail() {
   const [mostrar360, setMostrar360] = useState(false)
   const [resenas, setResenas] = useState([])
   const [fotoUrl, setFotoUrl] = useState(null)
-  // null = aún verificando, true = disponible, false = no disponible
   const [streetViewDisponible, setStreetViewDisponible] = useState(null)
 
-  // ── Cargar lugar ──────────────────────────────────────────────────────────
   useEffect(() => {
     async function fetchLugar() {
       const state = location.state?.lugar
@@ -69,36 +67,29 @@ export default function Detail() {
     fetchLugar()
   }, [id])
 
-  // ── Verificar StreetView dinámicamente ────────────────────────────────────
   useEffect(() => {
     if (!lugar || !window.google) return
-
     const sv = new window.google.maps.StreetViewService()
     sv.getPanorama(
       {
         location: { lat: lugar.lat, lng: lugar.lng },
-        radius: 50,           // busca hasta 50m alrededor
+        radius: 50,
         preference: window.google.maps.StreetViewPreference.NEAREST,
         source: window.google.maps.StreetViewSource.OUTDOOR,
       },
       (data, status) => {
-        setStreetViewDisponible(
-          status === window.google.maps.StreetViewStatus.OK
-        )
+        setStreetViewDisponible(status === window.google.maps.StreetViewStatus.OK)
       }
     )
   }, [lugar])
 
-  // ── Verificar favorito ────────────────────────────────────────────────────
   useEffect(() => {
     verificarFavorito()
   }, [id, user])
 
   const cargarDesdePlaces = (local) => {
     if (!window.google) return
-    const service = new window.google.maps.places.PlacesService(
-      document.createElement('div')
-    )
+    const service = new window.google.maps.places.PlacesService(document.createElement('div'))
     service.findPlaceFromQuery({
       query: local.nombre + ' Montería Colombia',
       fields: ['photos', 'rating', 'user_ratings_total', 'opening_hours', 'reviews', 'formatted_address']
@@ -142,7 +133,12 @@ export default function Detail() {
   }
 
   const toggleFavorito = async () => {
-    if (!user || loadingFav) return
+    // Si no hay sesión, invitar a login
+    if (!user) {
+      onRequireAuth?.()
+      return
+    }
+    if (loadingFav) return
     const nuevoEstado = !esFavorito
     setEsFavorito(nuevoEstado)
     try {
@@ -166,11 +162,7 @@ export default function Detail() {
 
   const compartir = async () => {
     if (navigator.share && lugar) {
-      await navigator.share({
-        title: lugar.nombre,
-        text: lugar.descripcion,
-        url: window.location.href
-      })
+      await navigator.share({ title: lugar.nombre, text: lugar.descripcion, url: window.location.href })
     }
   }
 
@@ -179,8 +171,7 @@ export default function Detail() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <div style={{
           width: 32, height: 32, borderRadius: '50%',
-          border: '3px solid #1D9E75',
-          borderTopColor: 'transparent',
+          border: '3px solid #1D9E75', borderTopColor: 'transparent',
           animation: 'spin 0.8s linear infinite'
         }} />
         <style dangerouslySetInnerHTML={{ __html: '@keyframes spin { to { transform: rotate(360deg); } }' }} />
@@ -192,7 +183,6 @@ export default function Detail() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'white', paddingBottom: 140, overflowY: 'auto' }}>
-
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes heartPop {
@@ -203,15 +193,12 @@ export default function Detail() {
         }
       ` }} />
 
-      {/* ── Hero foto ── */}
+      {/* Hero foto */}
       <div style={{ position: 'relative', height: 280, background: '#E8F7F2', overflow: 'hidden' }}>
         {fotoUrl ? (
-          <img
-            src={fotoUrl}
-            alt={lugar.nombre}
+          <img src={fotoUrl} alt={lugar.nombre}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            onError={() => setFotoUrl(null)}
-          />
+            onError={() => setFotoUrl(null)} />
         ) : (
           <div style={{
             width: '100%', height: '100%',
@@ -245,12 +232,12 @@ export default function Detail() {
 
             <button
               onClick={toggleFavorito}
-              disabled={loadingFav}
               style={{
                 ...iconBtnStyle,
                 background: esFavorito ? '#FEE2E2' : 'white',
                 animation: esFavorito ? 'heartPop 0.35s ease' : 'none',
-                transition: 'background 0.2s'
+                transition: 'background 0.2s',
+                position: 'relative'
               }}
             >
               <Heart
@@ -259,11 +246,17 @@ export default function Detail() {
                 fill={esFavorito ? '#EF4444' : 'none'}
                 style={{ transition: 'color 0.2s, fill 0.2s' }}
               />
+              {/* Candadito si no hay sesión */}
+              {!user && (
+                <span style={{
+                  position: 'absolute', bottom: -2, right: -2,
+                  fontSize: 10, lineHeight: 1
+                }}>🔒</span>
+              )}
             </button>
           </div>
         </div>
 
-        {/* Badge 360 — solo si StreetView está confirmado disponible */}
         {streetViewDisponible === true && (
           <button
             onClick={() => setMostrar360(true)}
@@ -281,9 +274,8 @@ export default function Detail() {
         )}
       </div>
 
-      {/* ── Contenido ── */}
+      {/* Contenido */}
       <div style={{ padding: '20px 20px 0' }}>
-
         <div style={{ marginBottom: 12 }}>
           <span style={{
             fontSize: 11, fontWeight: 700, color: '#1D9E75',
@@ -298,9 +290,7 @@ export default function Detail() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
           <Star size={16} color="#F5A623" fill="#F5A623" />
-          <span style={{ fontWeight: 700, fontSize: 15, color: '#1A1A2E' }}>
-            {lugar.calificacion}
-          </span>
+          <span style={{ fontWeight: 700, fontSize: 15, color: '#1A1A2E' }}>{lugar.calificacion}</span>
           <span style={{ fontSize: 13, color: '#9CA3AF' }}>
             ({lugar.resenas ? lugar.resenas.toLocaleString() : '0'} reseñas)
           </span>
@@ -316,6 +306,29 @@ export default function Detail() {
           {lugar.descripcion}
         </p>
 
+        {/* Banner de invitación si no hay sesión */}
+        {!user && (
+          <div
+            onClick={() => onRequireAuth?.()}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '14px 16px', borderRadius: 16, marginBottom: 20,
+              background: 'linear-gradient(135deg, #E8F7F2, #D1FAE5)',
+              border: '1.5px solid #6EE7B7', cursor: 'pointer'
+            }}
+          >
+            <Heart size={20} color="#1D9E75" />
+            <div>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#065F46' }}>
+                ¿Te gustó este lugar?
+              </p>
+              <p style={{ margin: 0, fontSize: 12, color: '#047857' }}>
+                Inicia sesión para guardarlo en favoritos →
+              </p>
+            </div>
+          </div>
+        )}
+
         {lugar.direccion && (
           <div style={{
             display: 'flex', gap: 10, alignItems: 'flex-start',
@@ -323,9 +336,7 @@ export default function Detail() {
             background: '#F9FAFB', borderRadius: 12
           }}>
             <MapPin size={16} color="#1D9E75" style={{ flexShrink: 0, marginTop: 1 }} />
-            <span style={{ fontSize: 13, color: '#6B7280', lineHeight: 1.5 }}>
-              {lugar.direccion}
-            </span>
+            <span style={{ fontSize: 13, color: '#6B7280', lineHeight: 1.5 }}>{lugar.direccion}</span>
           </div>
         )}
 
@@ -342,19 +353,13 @@ export default function Detail() {
                 borderRadius: 12, marginBottom: 8
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <img
-                    src={r.profile_photo_url}
-                    alt={r.author_name}
-                    style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }}
-                  />
+                  <img src={r.profile_photo_url} alt={r.author_name}
+                    style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
                   <div>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#1A1A2E' }}>
-                      {r.author_name}
-                    </p>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#1A1A2E' }}>{r.author_name}</p>
                     <div style={{ display: 'flex', gap: 2 }}>
                       {[...Array(5)].map((_, j) => (
-                        <Star key={j} size={10} color="#F5A623"
-                          fill={j < r.rating ? '#F5A623' : 'none'} />
+                        <Star key={j} size={10} color="#F5A623" fill={j < r.rating ? '#F5A623' : 'none'} />
                       ))}
                     </div>
                   </div>
@@ -368,14 +373,13 @@ export default function Detail() {
         )}
       </div>
 
-      {/* ── Botones fijos abajo ── */}
+      {/* Botones fijos abajo */}
       <div style={{
         position: 'fixed', bottom: 64, left: 0, right: 0,
         background: 'white', padding: '12px 20px 16px',
         borderTop: '1px solid #F3F4F6',
         display: 'flex', gap: 10, zIndex: 50
       }}>
-        {/* Botón 360° solo si StreetView confirmado */}
         {streetViewDisponible === true && (
           <button
             onClick={() => setMostrar360(true)}
@@ -406,7 +410,7 @@ export default function Detail() {
         </button>
       </div>
 
-      {/* ── Modal StreetView ── */}
+      {/* Modal StreetView */}
       {mostrar360 && (
         <div style={{
           position: 'fixed', inset: 0,
@@ -427,9 +431,7 @@ export default function Detail() {
                 borderRadius: '50%', width: 36, height: 36,
                 color: 'white', fontSize: 18, cursor: 'pointer'
               }}
-            >
-              ✕
-            </button>
+            >✕</button>
           </div>
           <iframe
             src={

@@ -2,15 +2,23 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Compass, Heart, Sparkles, User } from 'lucide-react'
 
 const tabs = [
-  { path: '/map',             icon: Compass,  label: 'Explorar'  },
-  { path: '/favorites',       icon: Heart,    label: 'Favoritos' },
-  { path: '/recommendations', icon: Sparkles, label: 'Para ti'   },
-  { path: '/profile',         icon: User,     label: 'Perfil'    },
+  { path: '/map',             icon: Compass,  label: 'Explorar',  public: true  },
+  { path: '/favorites',       icon: Heart,    label: 'Favoritos', public: false },
+  { path: '/recommendations', icon: Sparkles, label: 'Para ti',   public: false },
+  { path: '/profile',         icon: User,     label: 'Perfil',    public: false },
 ]
 
-export default function Navbar() {
+export default function Navbar({ user, onRequireAuth }) {
   const { pathname } = useLocation()
   const navigate     = useNavigate()
+
+  const handleTabPress = (tab) => {
+    if (!tab.public && !user) {
+      onRequireAuth?.()
+      return
+    }
+    navigate(tab.path)
+  }
 
   return (
     <nav style={{
@@ -27,17 +35,19 @@ export default function Navbar() {
       {tabs.map(tab => {
         const active = pathname === tab.path
         const Icon   = tab.icon
+        const locked = !tab.public && !user
 
-        // El ícono de Favoritos se rellena en rojo cuando está activo
-        const isFavTab = tab.path === '/favorites'
+        const isFavTab  = tab.path === '/favorites'
         const iconColor = active
           ? (isFavTab ? '#EF4444' : '#1D9E75')
-          : '#9CA3AF'
+          : locked
+            ? '#D1D5DB'
+            : '#9CA3AF'
 
         return (
           <button
             key={tab.path}
-            onClick={() => navigate(tab.path)}
+            onClick={() => handleTabPress(tab)}
             style={{
               flex: 1,
               display: 'flex',
@@ -48,7 +58,8 @@ export default function Navbar() {
               gap: '4px',
               background: 'none',
               border: 'none',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              position: 'relative'
             }}
           >
             <Icon
@@ -57,6 +68,19 @@ export default function Navbar() {
               color={iconColor}
               fill={active && isFavTab ? '#EF4444' : 'none'}
             />
+            {/* Candadito pequeño si está bloqueado */}
+            {locked && (
+              <span style={{
+                position: 'absolute',
+                top: 8,
+                right: 'calc(50% - 16px)',
+                fontSize: 8,
+                lineHeight: 1,
+                color: '#9CA3AF'
+              }}>
+                🔒
+              </span>
+            )}
             <span style={{
               fontSize: '10px',
               fontWeight: 600,
